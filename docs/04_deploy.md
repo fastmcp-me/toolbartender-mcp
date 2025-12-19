@@ -15,5 +15,5 @@
   - proxy_buffering off
   - 적절한 proxy_read_timeout
   - Connection 헤더 처리
-같은 설정이 필요할 수 있음(환경에 따라).
+같은 설정이 필요할 수 있음(환경에 따라).<br>
 (상세는 프로젝트의 실제 nginx conf에 맞춰 업데이트 권장)

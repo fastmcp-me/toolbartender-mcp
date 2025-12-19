@@ -23,16 +23,16 @@
 
 ## 3) plan_render_prompt
 ### 목적
-LLM 실행 에이전트가 steps를 “순서대로” 호출하도록 실행 프롬프트를 생성합니다. :contentReference[oaicite:14]{index=14}
+LLM 실행 에이전트가 steps를 “순서대로” 호출하도록 실행 프롬프트를 생성합니다.
 
 ### Output
 - ok, missing_tools, prompt
 
 ## 4) plan_explain
 ### 목적
-사용자에게 “왜 이 도구들을 쓰는지 / 무엇을 확인해야 하는지” 요약합니다. :contentReference[oaicite:15]{index=15}
+사용자에게 “왜 이 도구들을 쓰는지 / 무엇을 확인해야 하는지” 요약합니다.
 
 ---
 
 ## Example plan (simplified)
-기존 README에 있는 예시를 그대로 사용해도 됩니다. :contentReference[oaicite:16]{index=16}
+기존 README에 있는 예시를 그대로 사용해도 됩니다.
