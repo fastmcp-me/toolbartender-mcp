@@ -3,7 +3,7 @@
 PlayMCP에서 여러 MCP 도구를 **안전하게 조합**해서 실행할 수 있도록,<br>
 `goal` + `available_tools`를 입력으로 받아 **실행 계획(plan)** 을 만드는 MCP 서버입니다.
 
-# PoC 링크
+## PoC 링크
 http://54.180.123.112/mcp
 
 ## 제공 도구
