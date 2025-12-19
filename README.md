@@ -1,7 +1,10 @@
 # ToolBartender (MCP)
 
-PlayMCP에서 여러 MCP 도구를 **안전하게 조합**해서 실행할 수 있도록,
+PlayMCP에서 여러 MCP 도구를 **안전하게 조합**해서 실행할 수 있도록,<br>
 `goal` + `available_tools`를 입력으로 받아 **실행 계획(plan)** 을 만드는 MCP 서버입니다.
+
+# PoC 링크
+http://54.180.123.112/mcp
 
 ## 제공 도구
 
@@ -34,11 +37,12 @@ python src/main.py
 # 기본: http://localhost:3333/mcp
 ```
 
-서버는 Streamable HTTP로 뜹니다. FastMCP는 기본 경로가 `/mcp/`이고, 이 프로젝트는 `path="/mcp"`로 맞춰둔 상태입니다. citeturn0search8
+서버는 Streamable HTTP로 뜹니다. FastMCP는 기본 경로가 `/mcp/`이고,<br> 
+이 프로젝트는 `path="/mcp"`로 맞춰둔 상태입니다.
 
 ## Inspector로 로컬 테스트 (PlayMCP 역할 흉내)
 
-MCP Inspector는 Node 기반 도구입니다. GitHub 문서 기준으로 아래처럼 실행합니다. citeturn0search7
+MCP Inspector는 Node 기반 도구입니다. GitHub 문서 기준으로 아래처럼 실행합니다.
 
 ```bash
 # UI 실행
@@ -46,7 +50,8 @@ npx @modelcontextprotocol/inspector
 # 브라우저: http://localhost:6274
 ```
 
-Inspector UI에서 **서버 URL**을 `http://localhost:3333/mcp` 로 연결해 도구 목록/스키마/호출을 확인합니다.
+Inspector UI에서 **서버 URL**을 `http://localhost:3333/mcp` 로 연결해<br>
+도구 목록/스키마/호출을 확인합니다.
 
 ## PlayMCP 등록/테스트 흐름
 
@@ -56,4 +61,4 @@ Inspector UI에서 **서버 URL**을 `http://localhost:3333/mcp` 로 연결해 �
 4) 충분히 검증되면 심사 요청 → 게시
 
 > 중요한 점: “내 서버가 PlayMCP 도구함 목록을 API로 긁어오는 구조”가 아니라,
-> PlayMCP(클라이언트)가 “내 서버 URL로 도구 호출”을 하는 구조입니다. fileciteturn9file1L1-L7
+> PlayMCP(클라이언트)가 “내 서버 URL로 도구 호출”을 하는 구조입니다.
