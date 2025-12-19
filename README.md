@@ -1,4 +1,9 @@
 # ToolBartender 🍸
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![CI Status](https://github.com/toolbartender/toolbartender-mcp/actions/workflows/deploy.yml/badge.svg)](https://github.com/sungminwoo0612/toolbartender-mcp/actions/workflows/deploy.yml)
+[![Deploy (EC2)](https://img.shields.io/badge/Deploy-EC2-orange.svg)](https://aws.amazon.com/ec2/)
+
 **Planner MCP that turns natural-language goals into safe, structured execution plans (JSON)**
 
 ToolBartender는 사용자의 자연어 요청을 **하나의 goal**로 받아,<br>
