@@ -1,50 +1,42 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastmcp import FastMCP
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from models import Plan
-from planner import create_plan
+from planner import create_plan, parse_goal
 
 
 # -------------------------
-# IO models
+# Output models (tool results)
 # -------------------------
-class PlanCreateInput(BaseModel):
-    goal: str
-    available_tools: List[str] = []
+class ParseGoalOutput(BaseModel):
+    intent_type: str
+    date_token: str
+    time_hhmm: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    title: Optional[str] = None
+    email: Optional[str] = None
+    notes: List[str] = Field(default_factory=list)
 
 
 class PlanCreateOutput(BaseModel):
     plan: Plan
 
 
-class PlanValidateInput(BaseModel):
-    plan: Plan
-    available_tools: List[str] = []
-
-
 class PlanValidateOutput(BaseModel):
     ok: bool
-    issues: List[str]
-    missing_tools: List[str]
-
-
-class PlanRenderPromptInput(BaseModel):
-    plan: Plan
-    available_tools: List[str] = []
+    issues: List[str] = Field(default_factory=list)
+    missing_tools: List[str] = Field(default_factory=list)
 
 
 class PlanRenderPromptOutput(BaseModel):
     ok: bool
-    missing_tools: List[str]
+    missing_tools: List[str] = Field(default_factory=list)
     prompt: str
-
-
-class PlanExplainInput(BaseModel):
-    plan: Plan
 
 
 class PlanExplainOutput(BaseModel):
@@ -106,55 +98,88 @@ mcp = FastMCP(
     instructions="Mixing tools. Serving intent.",
 )
 
+# NOTE:
+# PlayMCP AI 채팅은 tool call arguments를 자동으로 구성해야 하므로,
+# input을 중첩(BaseModel 파라미터 1개) 형태로 받으면 LLM이 쉽게 실패합니다.
+# 따라서 아래 Tool API는 "flat arguments"를 우선으로 설계합니다.
+#
+# MCP 스펙 관점에서도 tools/call의 params.arguments는 inputSchema에 맞는 object를 기대합니다.
+# (goal: string 같은 단순한 required 필드가 가장 안정적)
 
+
+# -------------------------
+# 1) Parse: goal만 받아서 slot/intent를 추출
+# -------------------------
 @mcp.tool(
-    name="plan_create", 
-    description="사용자의 복합 자연어 목표에서 실행 순서와 MCP 도구 목록을 추출해 단계별 계획(JSON)을 생성합니다.",
+    name="tb_parse_goal",
+    description="자연어 goal에서 intent/slot(출발/도착/시간/날짜 등)을 추출합니다. (PlayMCP 친화: goal 문자열 1개 입력)",
 )
-def plan_create(input: PlanCreateInput) -> PlanCreateOutput:
-    plan = create_plan(goal=input.goal, available_tools=input.available_tools)
+def tb_parse_goal(goal: str) -> ParseGoalOutput:
+    data = parse_goal(goal)
+    return ParseGoalOutput(**data)
+
+
+# -------------------------
+# 2) Plan: goal(+optional available_tools)로 실행 계획 생성
+# -------------------------
+@mcp.tool(
+    name="tb_plan_create",
+    description=(
+        "자연어 goal에서 실행 순서와 도구 호출 단계를 포함한 plan(JSON)을 생성합니다. "
+        "available_tools를 제공하면 해당 도구만 사용하도록 제한합니다(엄격 모드)."
+    ),
+)
+def tb_plan_create(goal: str, available_tools: Optional[List[str]] = None) -> PlanCreateOutput:
+    strict = bool(available_tools)
+    plan = create_plan(goal=goal, available_tools=available_tools, strict_available_tools=strict)
     return PlanCreateOutput(plan=plan)
 
 
-
-@mcp.tool(name="plan_validate", description="생성된 실행 계획(plan)이 현재 사용 가능한 MCP 도구로 실제 실행 가능한지 검증합니다. 필요한 도구가 누락되었거나, 실행 전에 사용자 확인이 필요한 작업이 있는지 등을 점검하여 실행 가능 여부와 주의사항(issues), 누락된 도구 목록을 반환합니다.")
-def plan_validate(input: PlanValidateInput) -> PlanValidateOutput:
-    available = set(input.available_tools or [])
-    used = [s.tool_name for s in input.plan.steps]
-    missing = sorted({t for t in used if t not in available})
+# -------------------------
+# 3) Validate/Render/Explain: 실행 가능성 점검 + 실행 프롬프트 + 사용자 설명
+# -------------------------
+@mcp.tool(
+    name="tb_plan_validate",
+    description=(
+        "생성된 plan이 현재 available_tools로 실행 가능한지 검증합니다. "
+        "available_tools가 비어 있으면 plan.steps에 포함된 도구 전체를 missing으로 반환합니다."
+    ),
+)
+def tb_plan_validate(plan: Plan, available_tools: Optional[List[str]] = None) -> PlanValidateOutput:
+    available = set(available_tools or [])
+    used = [s.tool_name for s in plan.steps]
+    missing = sorted({t for t in used if (not available) or (t not in available)})
 
     issues: List[str] = []
-    if not available:
-        issues.append("available_tools가 비어 있습니다: 활성화된 도구가 없으므로, 해당 환경에서는 계획을 실행할 수 없습니다.")
+    if not available_tools:
+        issues.append("available_tools가 비어 있습니다: 실행 환경에서 활성화된 도구 목록을 전달하지 못해 missing 판단을 보수적으로 처리했습니다.")
     if missing:
-        issues.append(f"누락된 도구: {', '.join(missing)}")
-    if not input.plan.steps:
-        issues.append("plan.steps가 비어 있습니다: 실행할 단계가 없습니다 (필요한 도구가 활성화되지 않은 것일 수 있습니다).")
+        issues.append(f"누락된 도구(또는 미확인): {', '.join(missing)}")
+    if not plan.steps:
+        issues.append("plan.steps가 비어 있습니다: 실행할 단계가 없습니다 (goal 해석 실패 또는 도구 제한 때문일 수 있습니다).")
 
-    ok = (len(missing) == 0) and bool(available) and bool(input.plan.steps)
+    ok = (len(missing) == 0) and bool(plan.steps) and bool(available_tools)
     return PlanValidateOutput(ok=ok, issues=issues, missing_tools=missing)
 
 
 @mcp.tool(
-    name="plan_render_prompt",
+    name="tb_plan_render_prompt",
     description=(
-        "실행 에이전트나 LLM이 계획(plan)을 안전하게 실행할 수 있도록 실행용 프롬프트를 생성합니다. "
-        "도구 사용 규칙, 실행 순서, 오류 발생 시 대응 방법 등 안전한 실행을 위한 안내 문장을 제공합니다."
+        "실행 에이전트/LLM이 plan을 안전하게 실행하도록 실행용 프롬프트를 생성합니다. "
+        "도구 사용 규칙, 실행 순서, 오류 대응, 사용자 확인 게이트를 포함합니다."
     ),
 )
-def plan_render_prompt(input: PlanRenderPromptInput) -> PlanRenderPromptOutput:
-    plan = input.plan
-    available = set(input.available_tools or [])
-
+def tb_plan_render_prompt(plan: Plan, available_tools: Optional[List[str]] = None) -> PlanRenderPromptOutput:
+    available = set(available_tools or [])
     used_tools = [s.tool_name for s in plan.steps]
     used_unique = sorted(set(used_tools))
 
-    if not available:
+    if not available_tools:
         missing = used_unique
     else:
         missing = sorted({t for t in used_unique if t not in available})
 
-    ok = (len(missing) == 0) and bool(plan.steps) and bool(available)
+    ok = (len(missing) == 0) and bool(plan.steps) and bool(available_tools)
 
     steps_text = (
         "\n".join(
@@ -208,23 +233,19 @@ required_confirmations:
 Execution hint (from plan):
 {plan.execution_hint or "(none)"}
 """
-
     return PlanRenderPromptOutput(ok=ok, missing_tools=missing, prompt=prompt)
 
 
-
 @mcp.tool(
-    name="plan_explain",
-    description="실행 계획을 사용자에게 한국어로 설명합니다: 어떤 도구를 왜 사용하는지, 필요한 확인 사항은 무엇인지 안내합니다.",
+    name="tb_plan_explain",
+    description="plan을 사용자에게 한국어로 설명합니다: 어떤 도구를 왜 사용하는지, 필요한 확인 사항은 무엇인지 안내합니다.",
 )
-def plan_explain(input: PlanExplainInput) -> PlanExplainOutput:
-    plan = input.plan
-
+def tb_plan_explain(plan: Plan) -> PlanExplainOutput:
     lines: List[str] = []
     lines.append(f"목표: {plan.intent}")
 
     if not plan.steps:
-        lines.append("실행할 단계가 없습니다. (사용 가능한 도구 목록이 비었거나, 목표(goal) 해석에 실패한 경우일 수 있습니다.)")
+        lines.append("실행할 단계가 없습니다. (goal 해석 실패 또는 도구 제한/미제공 때문일 수 있습니다.)")
     else:
         lines.append("실행 단계:")
         for i, s in enumerate(plan.steps, 1):
